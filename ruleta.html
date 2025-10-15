@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ruleta de Premios</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background: radial-gradient(circle at center, #0a0f2c 0%, #000 100%);
+      height: 100vh;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: "Poppins", sans-serif;
+      color: white;
+      overflow: hidden;
+    }
+
+    .container {
+      display: flex;
+      align-items: center;
+      gap: 40px;
+      position: relative;
+    }
+
+    .brand {
+      font-family: "Cinzel Decorative", serif;
+      font-size: 36px;
+      font-weight: 700;
+      background: linear-gradient(90deg, #facc15, #a855f7, #3b82f6, #22c55e);
+      background-size: 300% 300%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: shine 6s infinite linear;
+      text-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+      transition: opacity 0.6s ease;
+    }
+
+    .brand.fade {
+      opacity: 0;
+    }
+
+    canvas {
+      border-radius: 50%;
+      border: 10px solid #0a0f2c;
+      box-shadow: 0 0 25px rgba(0,0,0,0.5);
+    }
+
+    .pointer {
+  width: 0;
+  height: 0;
+  border-left: 20px solid transparent;
+  border-right: 20px solid transparent;
+  border-bottom: 40px solid #facc15;
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+
+    #spin {
+  position: absolute;
+  bottom: -110px; 
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 35px;
+  border: none;
+  border-radius: 10px;
+  font-size: 20px;
+  font-weight: bold;
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+  color: #fff;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+    #spin:hover {
+      transform: translateX(-50%) scale(1.05);
+    }
+
+    /* Overlay para mostrar el resultado */
+    #overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      backdrop-filter: blur(10px);
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      z-index: 10;
+      animation: fadeIn 0.5s ease forwards;
+      text-align: center;
+    }
+
+    #overlay h1 {
+      font-size: 70px;
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 0 0 25px #fff;
+      margin: 25px 0;
+      animation: pop 0.8s ease;
+    }
+
+    #continue {
+      padding: 12px 35px;
+      border: none;
+      border-radius: 10px;
+      font-size: 20px;
+      background: linear-gradient(90deg, #3b82f6, #2563eb);
+      color: #fff;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    #continue:hover {
+      transform: scale(1.1);
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0); opacity: 0; }
+      60% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes shine {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="brand" id="brandLeft">BISUTERIA DAZZLY</div>
+    <div class="pointer"></div>
+    <canvas id="wheel" width="400" height="400"></canvas>
+    <div class="brand" id="brandRight">BISUTERIA DAZZLY</div>
+    <button id="spin">🎯 GIRAR</button>
+  </div>
+
+  <!-- Overlay de resultado -->
+  <div id="overlay">
+    <h1 id="result"></h1>
+    <button id="continue">🔁 SEGUIR</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("wheel");
+    const ctx = canvas.getContext("2d");
+    const spinBtn = document.getElementById("spin");
+    const overlay = document.getElementById("overlay");
+    const resultEl = document.getElementById("result");
+    const continueBtn = document.getElementById("continue");
+    const brandLeft = document.getElementById("brandLeft");
+    const brandRight = document.getElementById("brandRight");
+
+    const options = ["CHUPETE", "GOMITAS", "DESCUENTO", "BARRILETE", "BOMBOM", "CARAMELO"];
+    const colors = ["#ef4444", "#f97316", "#facc15", "#22c55e", "#3b82f6", "#a855f7"];
+    let startAngle = 0;
+    let spinning = false;
+
+    const spinSound = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+    const winSound = new Audio("https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg");
+    spinSound.volume = 0.6;
+    winSound.volume = 0.8;
+
+    document.body.addEventListener("click", () => {
+      spinSound.load();
+      winSound.load();
+    }, { once: true });
+
+    function drawWheel() {
+      const outsideRadius = 180;
+      const textRadius = 140;
+      ctx.clearRect(0, 0, 400, 400);
+      for (let i = 0; i < options.length; i++) {
+        const angle = startAngle + (i * 2 * Math.PI / options.length);
+        ctx.fillStyle = colors[i];
+        ctx.beginPath();
+        ctx.moveTo(200, 200);
+        ctx.arc(200, 200, outsideRadius, angle, angle + 2 * Math.PI / options.length, false);
+        ctx.lineTo(200, 200);
+        ctx.fill();
+
+        ctx.save();
+        ctx.fillStyle = "#fff";
+        ctx.translate(
+          200 + Math.cos(angle + Math.PI / options.length) * textRadius,
+          200 + Math.sin(angle + Math.PI / options.length) * textRadius
+        );
+        ctx.rotate(angle + Math.PI / options.length + Math.PI / 2);
+        ctx.font = "bold 16px Poppins";
+        ctx.fillText(options[i], -ctx.measureText(options[i]).width / 2, 0);
+        ctx.restore();
+      }
+    }
+
+    function spinWheel() {
+      if (spinning) return;
+      spinning = true;
+      spinBtn.disabled = true;
+      spinSound.currentTime = 0;
+      spinSound.play().catch(() => {});
+
+      const spins = Math.floor(Math.random() * 5) + 10;
+      const totalRotation = spins * 360 + Math.random() * 360;
+      const duration = 5000;
+      let start = null;
+
+      function animate(timestamp) {
+        if (!start) start = timestamp;
+        const progress = timestamp - start;
+        const easeOut = 1 - Math.pow(1 - (progress / duration), 3);
+        const rotation = easeOut * totalRotation;
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.translate(200, 200);
+        ctx.rotate(rotation * Math.PI / 180);
+        ctx.translate(-200, -200);
+        drawWheel();
+
+        if (progress < duration) {
+          requestAnimationFrame(animate);
+        } else {
+          const finalRotation = totalRotation % 360;
+          const adjustedAngle = (360 - (finalRotation - 90)) % 360;
+          const degreesPerSlice = 360 / options.length;
+          const selected = Math.floor(adjustedAngle / degreesPerSlice);
+
+          spinning = false;
+          spinBtn.disabled = false;
+          showResult(options[selected]);
+          winSound.currentTime = 0;
+          winSound.play().catch(() => {});
+        }
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    function showResult(text) {
+      brandLeft.classList.add("fade");
+      brandRight.classList.add("fade");
+      overlay.style.display = "flex";
+      resultEl.textContent = text;
+    }
+
+    continueBtn.addEventListener("click", () => {
+      overlay.style.display = "none";
+      brandLeft.classList.remove("fade");
+      brandRight.classList.remove("fade");
+      startAngle = 0;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      drawWheel();
+    });
+
+    spinBtn.addEventListener("click", spinWheel);
+    drawWheel();
+  </script>
+</body>
+</html>
